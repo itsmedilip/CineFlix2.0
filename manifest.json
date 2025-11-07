@@ -1,0 +1,21 @@
+{
+  "short_name": "CineFlix",
+  "name": "CineFlix 2.0",
+  "description": "CineFlix is a modern, dark-themed movie and TV show streaming app inspired by Netflix. It allows users to browse trending, popular, and top-rated content, search for titles, and manage personal watchlists. Data is sourced from The Movie Database (TMDb) API.",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#101010",
+  "background_color": "#141414"
+}
