@@ -39,7 +39,7 @@ const App: React.FC = () => {
   const [selectedMedia, setSelectedMedia] = useState<{ id: number; type: MediaType } | null>(null);
   const [staticPageKey, setStaticPageKey] = useState<string | null>(null);
   
-  const [trending, setTrending] = useState<MediaItem[]>([]);
+  const [heroItems, setHeroItems] = useState<MediaItem[]>([]);
   const [movieLists, setMovieLists] = useState<Record<string, MediaItem[]>>({});
 
   const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
@@ -96,7 +96,7 @@ const App: React.FC = () => {
         }
       });
       
-      setTrending(newMoviesLists['Trending Movies'] || []);
+      setHeroItems((newMoviesLists['Recent Releases'] || newMoviesLists['Trending Movies'] || []).slice(0, 7));
       setMovieLists(newMoviesLists);
 
     } catch (error) {
@@ -154,8 +154,6 @@ const App: React.FC = () => {
     setStaticPageKey(key);
     window.scrollTo(0, 0);
   };
-
-  const heroItem = trending.length > 0 ? trending[0] : null;
 
   const pageFetcher = useCallback((params: Record<string, any>, page: number): Promise<TMDbResponse<MediaItem>> => {
     // Add vote_count minimum for rating sort to get better quality results
@@ -216,9 +214,9 @@ const App: React.FC = () => {
     // Home view
     return (
       <>
-        {heroItem && (
+        {heroItems.length > 0 && (
           <Hero 
-            item={heroItem} 
+            items={heroItems} 
             onSelectMedia={handleSelectMedia} 
             myList={myList}
             setMyList={setMyList}
