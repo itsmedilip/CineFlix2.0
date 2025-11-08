@@ -9,11 +9,16 @@ interface HeaderProps {
   onSearch: (query: string) => void;
   onNavigate: (view: View) => void;
   currentView: string;
+  searchQuery: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ onSearch, onNavigate, currentView }) => {
-  const [query, setQuery] = useState('');
+const Header: React.FC<HeaderProps> = ({ onSearch, onNavigate, currentView, searchQuery }) => {
+  const [query, setQuery] = useState(searchQuery);
   const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    setQuery(searchQuery);
+  }, [searchQuery]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -32,13 +37,16 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onNavigate, currentView }) =>
   
   useEffect(() => {
     const timerId = setTimeout(() => {
-      onSearch(query);
+      // Only call onSearch if the query has actually changed from the prop
+      if (query !== searchQuery) {
+        onSearch(query);
+      }
     }, 500); // 500ms debounce delay
 
     return () => {
       clearTimeout(timerId);
     };
-  }, [query, onSearch]);
+  }, [query, searchQuery, onSearch]);
 
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,6 +55,7 @@ const Header: React.FC<HeaderProps> = ({ onSearch, onNavigate, currentView }) =>
   
   const clearSearch = () => {
     setQuery('');
+    onSearch('');
   }
 
   const NavButton: React.FC<{view: View, children: React.ReactNode}> = ({ view, children }) => {

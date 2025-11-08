@@ -50,14 +50,90 @@ const App: React.FC = () => {
   const handlePlay = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
+  
+  const processUrl = useCallback(async () => {
+    const path = window.location.pathname;
+    const searchParams = new URLSearchParams(window.location.search);
+
+    if (!path.startsWith('/search')) {
+      setSearchQuery('');
+      setSearchResults([]);
+    }
+
+    const staticPageKeys = ['faq', 'about-us', 'contact-us', 'account', 'terms-of-service', 'privacy-policy', 'legal', 'cookie-policy', 'dmca'];
+    const staticPageMatch = staticPageKeys.find(key => path === `/${key}`);
+    if (staticPageMatch) {
+      setView('static');
+      setStaticPageKey(staticPageMatch);
+      setSelectedMedia(null);
+      return;
+    }
+
+    const movieMatch = path.match(/\/movie\/(\d+)/);
+    if (movieMatch) {
+      const id = parseInt(movieMatch[1], 10);
+      setSelectedMedia({ id, type: 'movie' });
+      setView('details');
+      return;
+    }
+
+    const tvMatch = path.match(/\/tv\/(\d+)/);
+    if (tvMatch) {
+      const id = parseInt(tvMatch[1], 10);
+      setSelectedMedia({ id, type: 'tv' });
+      setView('details');
+      return;
+    }
+
+    if (path.startsWith('/search')) {
+      const query = searchParams.get('q') || '';
+      setSearchQuery(query);
+      setView('search');
+      if (query) {
+        setSearchResults(await searchMedia(query));
+      } else {
+        setSearchResults([]);
+      }
+      return;
+    }
+
+    let newView: View = 'home';
+    switch (path) {
+      case '/my-list':
+        newView = 'myList';
+        break;
+      case '/movies':
+        newView = 'movies';
+        break;
+      case '/genres':
+        newView = 'genres';
+        break;
+    }
+
+    setView(newView);
+    setSelectedMedia(null);
+    setStaticPageKey(null);
+  }, []);
+
+  useEffect(() => {
+    processUrl();
+    window.addEventListener('popstate', processUrl);
+    return () => {
+      window.removeEventListener('popstate', processUrl);
+    };
+  }, [processUrl]);
+
 
   const fetchInitialData = useCallback(async () => {
     try {
       const listsToFetch = {
-        'Recent Releases': getRecentReleases(),
+        'Recent Movie Releases': getRecentReleases(),
         'Trending Movies': getTrendingByType('movie'),
+        'Trending TV Shows': getTrendingByType('tv'),
         'Popular Movies': getPopular('movie'),
+        'Popular TV Shows': getPopular('tv'),
         'Top Rated Movies': getTopRated('movie'),
+        'Top Rated TV Shows': getTopRated('tv'),
         'Action Movies': getActionMovies(),
         'Comedy Movies': getComedyMovies(),
         'Horror Movies': getHorrorMovies(),
@@ -78,25 +154,21 @@ const App: React.FC = () => {
       const responses = await Promise.all(promises.map(p => p.catch(e => ({ results: [] }))));
       
       const newMoviesLists: Record<string, MediaItem[]> = {};
-      const seenMovieIds = new Set<number>();
+      const seenIds = new Set<number>();
 
       responses.forEach((res, index) => {
         const listName = listNames[index];
         if (res && res.results) {
-            // Filter out movies we've already seen in previous lists
-            const uniqueItems = res.results.filter(item => !seenMovieIds.has(item.id));
+            const uniqueItems = res.results.filter(item => !seenIds.has(item.id));
+            uniqueItems.forEach(item => seenIds.add(item.id));
             
-            // Add the new unique movie IDs to our set
-            uniqueItems.forEach(item => seenMovieIds.add(item.id));
-            
-            // Only add the list if it has unique items
             if (uniqueItems.length > 0) {
                 newMoviesLists[listName] = uniqueItems;
             }
         }
       });
       
-      setHeroItems((newMoviesLists['Recent Releases'] || newMoviesLists['Trending Movies'] || []).slice(0, 7));
+      setHeroItems((newMoviesLists['Recent Movie Releases'] || newMoviesLists['Trending Movies'] || []).slice(0, 7));
       setMovieLists(newMoviesLists);
 
     } catch (error) {
@@ -110,53 +182,54 @@ const App: React.FC = () => {
     }
   }, [view, fetchInitialData]);
   
-  const handleSearch = useCallback(async (query: string) => {
-    setSearchQuery(query);
-    if (query.trim() === '') {
-      setSearchResults([]);
-      setView(currentView => currentView === 'search' ? 'home' : currentView);
-      return;
+  const handleSearch = useCallback((query: string) => {
+    const trimmedQuery = query.trim();
+    const currentPath = window.location.pathname;
+    
+    if (trimmedQuery) {
+        const newPath = `/search?q=${encodeURIComponent(trimmedQuery)}`;
+        if (window.location.pathname + window.location.search !== newPath) {
+            window.history.pushState(null, '', newPath);
+        }
+    } else if (currentPath === '/search') {
+        window.history.pushState(null, '', '/');
     }
-    setView('search');
-    const response = await searchMedia(query);
-    setSearchResults(response.results);
-  }, []);
+    processUrl();
+  }, [processUrl]);
 
   const handleSelectMedia = (id: number, type: MediaType) => {
-    setSelectedMedia({ id, type });
-    setView('details');
+    window.history.pushState(null, '', `/${type}/${id}`);
+    processUrl();
     window.scrollTo(0, 0);
   };
 
   const handleBack = () => {
-    const previousView = view === 'details' 
-      ? (searchQuery ? 'search' : (sessionStorage.getItem('lastView') as View || 'home'))
-      : 'home';
-    setSelectedMedia(null);
-    setView(previousView);
+    window.history.back();
   };
   
   const navigate = (newView: View) => {
-    sessionStorage.setItem('lastView', view);
-    setView(newView);
-    setSelectedMedia(null);
-    setStaticPageKey(null);
-    window.scrollTo(0, 0);
-    if (newView !== 'search') {
-      setSearchQuery('');
-      setSearchResults([]);
+    let path = '/';
+    if (newView === 'myList') path = '/my-list';
+    else if (newView === 'movies') path = '/movies';
+    else if (newView === 'genres') path = '/genres';
+    
+    if (window.location.pathname !== path || window.location.search) {
+      window.history.pushState(null, '', path);
+      processUrl();
     }
+    window.scrollTo(0, 0);
   };
 
   const handleNavigateStatic = (key: string) => {
-    sessionStorage.setItem('lastView', view);
-    setView('static');
-    setStaticPageKey(key);
+    const path = `/${key}`;
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
+      processUrl();
+    }
     window.scrollTo(0, 0);
   };
 
   const pageFetcher = useCallback((params: Record<string, any>, page: number): Promise<TMDbResponse<MediaItem>> => {
-    // Add vote_count minimum for rating sort to get better quality results
     if (params.sort_by === 'vote_average.desc' || params.sort_by === 'vote_average.asc') {
         params['vote_count.gte'] = 200;
     }
@@ -199,8 +272,15 @@ const App: React.FC = () => {
     }
 
     if (view === 'myList') {
-      const myMovieList = myList.filter(item => item.media_type === 'movie' || !item.media_type);
-      return <div className="p-4 md:p-8 pt-24"><MediaGrid title="My Movie List" items={myMovieList} onSelectMedia={handleSelectMedia} /></div>;
+      const myMovieList = myList.filter(item => item.media_type === 'movie');
+      const myTvList = myList.filter(item => item.media_type === 'tv');
+      return (
+        <div className="p-4 md:p-8 pt-24 space-y-8 min-h-[60vh]">
+          {myMovieList.length > 0 && <MediaGrid title="My Movie List" items={myMovieList} onSelectMedia={handleSelectMedia} />}
+          {myTvList.length > 0 && <MediaGrid title="My TV Show List" items={myTvList} onSelectMedia={handleSelectMedia} />}
+          {myList.length === 0 && <p className="text-center text-gray-400">Your list is empty. Add movies and TV shows to see them here.</p>}
+        </div>
+      );
     }
     
     if (view === 'search') {
@@ -241,7 +321,7 @@ const App: React.FC = () => {
 
   return (
     <div className="bg-brand-dark min-h-screen text-white flex flex-col">
-      <Header onSearch={handleSearch} onNavigate={navigate} currentView={view} />
+      <Header onSearch={handleSearch} onNavigate={navigate} currentView={view} searchQuery={searchQuery} />
       <main className="flex-grow">
         {renderContent()}
       </main>

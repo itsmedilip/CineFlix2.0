@@ -37,7 +37,8 @@ const processResponse = (data: TMDbResponse<any>, type?: MediaType): TMDbRespons
     results: data.results
         .filter(item => {
           const itemMediaType = item.media_type || type;
-          return (itemMediaType === 'movie' || itemMediaType === 'tv') && item.poster_path && item.id && item.vote_average > 0;
+          // Filter out people, and items without posters or IDs
+          return (itemMediaType === 'movie' || itemMediaType === 'tv') && item.poster_path && item.id && item.vote_average >= 0;
         })
         .map(item => mapResultToMediaItem(item, type))
 });
@@ -106,20 +107,25 @@ export const getMysteryMovies = (page = 1) => getDiscoverMovies({ with_genres: '
 export const getRomanceMovies = (page = 1) => getDiscoverMovies({ with_genres: '10749' }, page);
 export const getDramaMovies = (page = 1) => getDiscoverMovies({ with_genres: '18' }, page);
 
-export const searchMedia = async (query: string, page: number = 1): Promise<TMDbResponse<MediaItem>> => {
-  const data = await fetchFromTMDB<TMDbResponse<any>>(`search/movie?query=${encodeURIComponent(query)}&page=${page}`);
-  return processResponse(data, 'movie');
+export const searchMedia = async (query: string, page: number = 1): Promise<MediaItem[]> => {
+  const data = await fetchFromTMDB<TMDbResponse<any>>(`search/multi?query=${encodeURIComponent(query)}&page=${page}`);
+  return processResponse(data).results;
 };
 
 export const getMediaDetails = async (id: number, type: MediaType): Promise<MediaDetails> => {
   const details = await fetchFromTMDB<any>(`${type}/${id}?append_to_response=videos,credits,recommendations,similar`);
   
-  const processedRecommendations = details.recommendations ? processResponse(details.recommendations, type) : null;
+  if (details.recommendations) {
+    details.recommendations = processResponse(details.recommendations, type);
+  }
   
-  if (processedRecommendations && processedRecommendations.results.length > 0) {
-      details.recommendations = processedRecommendations;
-  } else if (details.similar) {
-      details.recommendations = processResponse(details.similar, type);
+  if (details.similar) {
+    details.similar = processResponse(details.similar, type);
+  }
+
+  // Use recommendations if available, otherwise fallback to similar
+  if (!details.recommendations || details.recommendations.results.length === 0) {
+    details.recommendations = details.similar;
   }
   
   delete details.similar;
